@@ -48,6 +48,8 @@ Or build it with Cargo. Cargo compiles llama.cpp along the way, so you need CMak
 $ cargo install --git https://github.com/conao3/rust-plamo-tr-local
 ```
 
+Your first translation downloads the `2b` model (1.81 GB) from Hugging Face into your cache directory. Run `plamo-tr-local model download-model` to download it ahead of time.
+
 ## Usage
 
 Translate Japanese into English. `plamo-tr-local` prints JSON unless you ask for another format:
@@ -61,7 +63,7 @@ $ plamo-tr-local text translate-text --text 今日はいい天気ですね。
 }
 ```
 
-Omit `--text` to read the text from standard input, and print only the translation with `jq`:
+Omit `--text` to read the text from standard input, and print the translation alone with `jq`:
 
 ```console
 $ echo "Since it's raining today, I think I'll relax at home and read a book." \
@@ -98,9 +100,9 @@ The command line follows the grammar of the AWS CLI: `plamo-tr-local [global opt
 
 | Parameter | Meaning |
 |---|---|
-| `--text <TEXT>` | Text to translate. When omitted, `plamo-tr-local` reads standard input. |
-| `--source-language-code <LANG>` | Source language. When omitted, the model or `plamo-tr-local` detects it (see below). |
-| `--target-language-code <LANG>` | Target language. When omitted, `plamo-tr-local` translates Japanese text into English and anything else into Japanese. |
+| `--text <TEXT>` | Text to translate. `plamo-tr-local` reads standard input if you omit it. |
+| `--source-language-code <LANG>` | Source language. If you omit it, the model or `plamo-tr-local` detects it (see below). |
+| `--target-language-code <LANG>` | Target language. If you omit it, `plamo-tr-local` translates Japanese text into English and anything else into Japanese. |
 | `--writing-style <plain\|polite>` | Writing style of a Japanese translation. Needs the target `ja`. |
 | `--context <TEXT>` | Text that helps the model read the input, such as the surrounding paragraphs or the kind of page. |
 | `--glossary <Source=<term>,Target=<translation> ...>` | Translations of terms, separated by spaces. |
@@ -157,7 +159,12 @@ A value of `--text` or `--context` that starts with `file://` names a file to re
 | `8b` | 5.28 GB |
 | `31b` | about 19.5 GB |
 
-On an Intel Core Ultra 5 225U (CPU only, 10 threads), translating the MIT License (169 words) into Japanese takes about 7 seconds with `0.8b` and 16 seconds with `2b`, including loading the model. `0.8b` loads in 2.8 seconds, gives the first token 0.7 seconds later, and writes 71 tokens per second; `2b` loads in 3.4 seconds, gives the first token 2.9 seconds later, and writes 23 tokens per second.
+Speed on an Intel Core Ultra 5 225U (CPU only, 10 threads), translating the MIT License (169 words) into Japanese:
+
+| `--model-size` | Total | Model load | First token | Output |
+|---|---|---|---|---|
+| `0.8b` | about 7 s | 2.8 s | 0.7 s after the load | 71 tokens/s |
+| `2b` | about 16 s | 3.4 s | 2.9 s after the load | 23 tokens/s |
 
 The x86_64 Linux build targets `x86-64-v3` (AVX2, from Intel Haswell and AMD Excavator on), so llama.cpp uses the vector instructions.
 
@@ -165,7 +172,7 @@ The x86_64 Linux build targets `x86-64-v3` (AVX2, from Intel Haswell and AMD Exc
 
 You can use `plamo-tr-local` under the [Apache License 2.0](LICENSE).
 
-Preferred Networks licenses the PLaMo 3 Translate models that `plamo-tr-local` downloads under the [PLaMo Community License](https://plamo.preferredai.jp/info/plamo-community-license-en). Private and non-commercial use is free. Organizations with annual revenue of 1 billion yen or less can use the model commercially for free after they register on the [PLaMo commercial use form](https://forms.gle/mTL8tBLrMYXKNZD56). When you publish translations from the model, state that they are outputs of PLaMo. Read the license before you use the model.
+Preferred Networks licenses the PLaMo 3 Translate models that `plamo-tr-local` downloads under the [PLaMo Community License](https://plamo.preferredai.jp/info/plamo-community-license-en). Private and non-commercial use is free. Organizations with annual revenue of 1 billion yen or less can use the model for commercial purposes for free after they register on the [PLaMo commercial use form](https://forms.gle/mTL8tBLrMYXKNZD56). If you publish translations from the model, state that they are outputs of PLaMo. Read the license before you use the model.
 
 ## Development
 
