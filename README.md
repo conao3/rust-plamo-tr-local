@@ -1,8 +1,13 @@
+<p align="center">
+  <img src="docs/assets/banner.png" alt="plamo-tr-local: Translate text from the command line with PLaMo 3 Translate running on your machine" width="880">
+</p>
+
 <p align="center"><strong>Translate text from the command line with PLaMo 3 Translate running on your machine</strong></p>
 
 <p align="center">
   <a href="https://github.com/conao3/rust-plamo-tr-local/actions/workflows/ci.yml"><img src="https://github.com/conao3/rust-plamo-tr-local/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/conao3/rust-plamo-tr-local" alt="License: Apache-2.0"></a>
+  <a href="https://github.com/conao3/rust-plamo-tr-local/stargazers"><img src="https://img.shields.io/github/stars/conao3/rust-plamo-tr-local?style=flat" alt="GitHub stars"></a>
 </p>
 
 <p align="center">
@@ -16,14 +21,17 @@
 
 # plamo-tr-local
 
-`plamo-tr-local` translates text in your terminal with [PLaMo 3 Translate](https://huggingface.co/pfnet/plamo-3-translate-2b), the translation model by Preferred Networks, running on your own machine through [llama.cpp](https://github.com/ggml-org/llama.cpp). Your text never leaves your machine, and you need no account or API key. On the first run it downloads the model from Hugging Face into your cache directory.
+`plamo-tr-local` translates text in your terminal with [PLaMo 3 Translate](https://huggingface.co/pfnet/plamo-3-translate-2b), the translation model by Preferred Networks. It runs the model on your own machine through [llama.cpp](https://github.com/ggml-org/llama.cpp).
 
-It takes the same command line as [plamo-tr](https://github.com/conao3/rust-plamo-tr), which calls the PLaMo Translate service: `<command> <subcommand>` with named parameters, JSON output, `--query`, `--output text`, and `--cli-input-json`. In a shell script, you pipe text in and pick the translation out with a JMESPath query.
+- **Your text stays on your machine.** You need no account and no API key.
+- **It speaks the [plamo-tr](https://github.com/conao3/rust-plamo-tr) command line.** You get `<command> <subcommand>` with named parameters, JSON output, `--query`, `--output text`, and `--cli-input-json`. A `plamo-tr text translate-text` call without `--auth-file` runs unchanged under `plamo-tr-local`.
+- **It fits a shell pipeline.** Pipe text in and pick the translation out with a JMESPath query.
+- **You pick the model size.** Choose from `0.8b` to `31b`. On the first run, `plamo-tr-local` downloads the model from Hugging Face into your cache directory.
 
 Built with PLaMo.
 
 > [!NOTE]
-> `plamo-tr-local` is an unofficial tool and is not affiliated with Preferred Networks. The model is distributed under the [PLaMo Community License](https://plamo.preferredai.jp/info/plamo-community-license-en); see [License](#license).
+> `plamo-tr-local` is an unofficial tool and has no affiliation with Preferred Networks. Preferred Networks distributes the model under the [PLaMo Community License](https://plamo.preferredai.jp/info/plamo-community-license-en); see [License](#license).
 
 ## Install
 
@@ -34,7 +42,7 @@ $ nix run github:conao3/rust-plamo-tr-local -- text translate-text --text 今日
 $ nix profile install github:conao3/rust-plamo-tr-local
 ```
 
-Or build it with Cargo. The build compiles llama.cpp, so it needs CMake, a C++ compiler, and libclang:
+Or build it with Cargo. Cargo compiles llama.cpp along the way, so you need CMake, a C++ compiler, and libclang:
 
 ```console
 $ cargo install --git https://github.com/conao3/rust-plamo-tr-local
@@ -42,7 +50,7 @@ $ cargo install --git https://github.com/conao3/rust-plamo-tr-local
 
 ## Usage
 
-Translate Japanese into English. `plamo-tr-local` prints JSON by default:
+Translate Japanese into English. `plamo-tr-local` prints JSON unless you ask for another format:
 
 ```console
 $ plamo-tr-local text translate-text --text 今日はいい天気ですね。
@@ -61,7 +69,7 @@ $ echo "Since it's raining today, I think I'll relax at home and read a book." \
 今日は雨だから、家でくつろいで本を読もうと思う。
 ```
 
-Give the translation of a term with `--glossary`, and the writing style of Japanese with `--writing-style`:
+Fix the translation of a term with `--glossary`, and set the writing style of Japanese with `--writing-style`:
 
 ```console
 $ plamo-tr-local text translate-text --text "Filter tasks by owner." \
@@ -69,7 +77,7 @@ $ plamo-tr-local text translate-text --text "Filter tasks by owner." \
 担当者でタスクを絞り込みます。
 ```
 
-Pick a smaller and faster model, or a larger and more accurate one, with `--model-size`:
+Trade speed for accuracy with `--model-size`. Smaller models run faster, and larger ones translate better:
 
 ```console
 $ plamo-tr-local text translate-text --model-size 0.8b --text 今日はいい天気ですね。
@@ -77,7 +85,7 @@ $ plamo-tr-local text translate-text --model-size 0.8b --text 今日はいい天
 
 ## Commands
 
-The command line follows the grammar of the AWS CLI: `plamo-tr-local [global options] <command> <subcommand> [--parameter value ...]`. You name each parameter; `plamo-tr-local` takes no positional arguments.
+The command line follows the grammar of the AWS CLI: `plamo-tr-local [global options] <command> <subcommand> [--parameter value ...]`. You name each parameter, and `plamo-tr-local` takes no positional arguments.
 
 | Command | Subcommand | Output |
 |---|---|---|
@@ -99,13 +107,13 @@ The command line follows the grammar of the AWS CLI: `plamo-tr-local [global opt
 | `--model-size <0.8b\|2b\|8b\|31b>` | Size of the model. Defaults to `2b`. |
 | `--model-file <PATH>` | A GGUF file of PLaMo 3 Translate to use instead of a cached model. Defaults to `PLAMO_TR_LOCAL_MODEL_FILE`. |
 
-Either the source or the target must be `ja` or `en`. When you omit the source and the target is `ja` or `en`, the model detects the source language itself. For other targets, `plamo-tr-local` detects the source language with [whatlang](https://github.com/greyblake/whatlang-rs) and passes it to the model.
+Either the source or the target must be `ja` or `en`. If you omit the source and the target is `ja` or `en`, the model detects the source language itself. For other targets, `plamo-tr-local` detects the source language with [whatlang](https://github.com/greyblake/whatlang-rs) and passes it to the model.
 
-The model reads up to 32,768 tokens of input and output together. `plamo-tr-local` translates a long text a few paragraphs at a time and joins the translations with the original paragraph and line breaks.
+The model reads up to 32,768 tokens of input and output together. For a long text, `plamo-tr-local` translates a few paragraphs at a time and joins the translations with the original paragraph and line breaks.
 
 ### `model list-models` and `model download-model`
 
-`model download-model --model-size <SIZE>` downloads a model into the cache ahead of the first translation. `model list-models` shows where each model goes and whether it is downloaded.
+`model download-model --model-size <SIZE>` downloads a model into the cache before your first translation. `model list-models` shows where each model lives and whether you have downloaded it.
 
 ### Input from JSON and files
 
@@ -157,13 +165,13 @@ A value that starts with `file://` names a file to read, for example `--text fil
 
 On an Intel Core Ultra 5 225U (CPU only), translating one English sentence of about 20 words into Japanese takes about 7 seconds with `0.8b` and 17 seconds with `2b`, including loading the model.
 
-The x86_64 Linux build targets `x86-64-v3` (AVX2, from Intel Haswell and AMD Excavator on) so that llama.cpp uses the vector instructions.
+The x86_64 Linux build targets `x86-64-v3` (AVX2, from Intel Haswell and AMD Excavator on), so llama.cpp uses the vector instructions.
 
 ## License
 
-`plamo-tr-local` is licensed under the [Apache License 2.0](LICENSE).
+You can use `plamo-tr-local` under the [Apache License 2.0](LICENSE).
 
-The PLaMo 3 Translate models that it downloads are licensed under the [PLaMo Community License](https://plamo.preferredai.jp/info/plamo-community-license-en) by Preferred Networks. Private and non-commercial use is free. Commercial use is free for organizations with annual revenue of 1 billion yen or less after registering on the [PLaMo commercial use form](https://forms.gle/mTL8tBLrMYXKNZD56). When you publish translations made with the model, state that they are outputs of PLaMo. Read the license before you use the model.
+Preferred Networks licenses the PLaMo 3 Translate models that `plamo-tr-local` downloads under the [PLaMo Community License](https://plamo.preferredai.jp/info/plamo-community-license-en). Private and non-commercial use is free. Organizations with annual revenue of 1 billion yen or less can use the model commercially for free after they register on the [PLaMo commercial use form](https://forms.gle/mTL8tBLrMYXKNZD56). When you publish translations from the model, state that they are outputs of PLaMo. Read the license before you use the model.
 
 ## Development
 
