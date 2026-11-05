@@ -181,8 +181,12 @@ impl Translator {
         }
         send_logs_to_tracing(LogOptions::default().with_logs_enabled(logs));
         let backend = LlamaBackend::init().context("failed to start llama.cpp")?;
+        let started = Instant::now();
         let model = LlamaModel::load_from_file(&backend, path, &LlamaModelParams::default())
             .with_context(|| format!("failed to load the model {}", path.display()))?;
+        if logs {
+            eprintln!("model: loaded in {} ms", started.elapsed().as_millis());
+        }
         let stop = STOP_TOKENS
             .iter()
             .flat_map(|token| model.vocab().tokenize(token.as_bytes(), false, true))
@@ -250,9 +254,11 @@ impl Translator {
         let vocab = self.model.vocab();
         let mut output = Vec::new();
         let mut generated = 0;
+        let mut first = None;
         for position in (tokens.len() as i32..).take(max_output) {
             let token = sampler.sample(&context, batch.n_tokens() - 1);
             sampler.accept(token);
+            first.get_or_insert_with(|| started.elapsed());
             if vocab.is_eog(token) || self.stop.contains(&token) {
                 break;
             }
@@ -264,9 +270,10 @@ impl Translator {
         }
         if self.logs {
             eprintln!(
-                "prompt: {} tokens in {} ms, output: {generated} tokens in {} ms, threads: {}",
+                "prompt: {} tokens in {} ms, first token in {} ms, output: {generated} tokens in {} ms, threads: {}",
                 tokens.len(),
                 read.as_millis(),
+                first.unwrap_or(read).as_millis(),
                 (started.elapsed() - read).as_millis(),
                 self.threads
             );

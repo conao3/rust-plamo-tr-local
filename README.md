@@ -130,7 +130,7 @@ A value that starts with `file://` names a file to read, for example `--text fil
 |---|---|
 | `--output <json\|text\|table>` | Output format. Defaults to `json`. `text` prints the values of an object tab-separated on one line and each list item on its own line. |
 | `--query <JMESPath>` | Select part of the output with a [JMESPath](https://jmespath.org/) expression, for example `TranslatedText`. |
-| `--debug` | Print the parameters, the llama.cpp log, the token counts, and the full error chain to stderr. |
+| `--debug` | Print the parameters, the llama.cpp log, the model load time, the token counts and timings (to the first token and of the whole output), and the full error chain to stderr. |
 | `--version` | Print the version. |
 
 `help` prints the help of each level: `plamo-tr-local help`, `plamo-tr-local text help`, `plamo-tr-local text translate-text help`.
