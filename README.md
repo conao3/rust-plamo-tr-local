@@ -61,11 +61,11 @@ $ plamo-tr-local text translate-text --text 今日はいい天気ですね。
 }
 ```
 
-Read the text from standard input, and print only the translation with `--query` and `--output text`:
+Omit `--text` to read the text from standard input, and print only the translation with `--query` and `--output text`:
 
 ```console
 $ echo "Since it's raining today, I think I'll relax at home and read a book." \
-    | plamo-tr-local text translate-text --text file:///dev/stdin --query TranslatedText --output text
+    | plamo-tr-local text translate-text --query TranslatedText --output text
 今日は雨だから、家でゆっくり本を読んでいようと思う。
 ```
 
@@ -98,7 +98,7 @@ The command line follows the grammar of the AWS CLI: `plamo-tr-local [global opt
 
 | Parameter | Meaning |
 |---|---|
-| `--text <TEXT>` | Text to translate. Required. `file:///dev/stdin` reads standard input. |
+| `--text <TEXT>` | Text to translate. When omitted, `plamo-tr-local` reads standard input. |
 | `--source-language-code <LANG>` | Source language. When omitted, the model or `plamo-tr-local` detects it (see below). |
 | `--target-language-code <LANG>` | Target language. When omitted, `plamo-tr-local` translates Japanese text into English and anything else into Japanese. |
 | `--writing-style <plain\|polite>` | Writing style of a Japanese translation. Needs the target `ja`. |
@@ -148,7 +148,7 @@ A value that starts with `file://` names a file to read, for example `--text fil
 | Exit code | Meaning |
 |---|---|
 | 0 | Success. |
-| 252 | The command line or a parameter is invalid (unknown command or parameter, unsupported language code, missing or empty `--text`, `--writing-style` without the target `ja`, invalid `--cli-input-json` or `--query`). |
+| 252 | The command line or a parameter is invalid (unknown command or parameter, unsupported language code, missing `--text` while standard input is a terminal, empty text, `--writing-style` without the target `ja`, invalid `--cli-input-json` or `--query`). |
 | 254 | The model cannot take the input: the language pair is not supported, the input contains the model's reserved tokens (`<\|plamo:`), or a line is too long. |
 | 255 | Any other failure, such as a failed download or an unreadable model file. |
 

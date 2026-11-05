@@ -1,10 +1,11 @@
 mod output;
 
 use std::ffi::OsString;
+use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
 use clap::{ArgAction, Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -107,7 +108,7 @@ enum Skeleton {
 #[derive(Args, Serialize, Deserialize, Default)]
 #[serde(rename_all = "PascalCase", deny_unknown_fields)]
 struct TranslateTextArgs {
-    /// Text to translate. Use file:///dev/stdin to read standard input.
+    /// Text to translate. Read from standard input when omitted.
     #[arg(long, value_parser = parse_value)]
     #[serde(skip_serializing_if = "Option::is_none")]
     text: Option<String>,
@@ -474,12 +475,20 @@ fn translate_text(args: TranslateTextArgs, debug: bool) -> Result<Value, Failure
             .unwrap_or_default()
         );
     }
-    let Some(text) = args.text else {
-        return Err(usage("the required parameter --text was not provided"));
+    let text = match args.text {
+        Some(text) => text,
+        None if std::io::stdin().is_terminal() => {
+            return Err(usage(
+                "the required parameter --text was not provided, and standard input is a terminal",
+            ));
+        }
+        None => {
+            std::io::read_to_string(std::io::stdin()).context("failed to read standard input")?
+        }
     };
     let text = text.trim();
     if text.is_empty() {
-        return Err(usage("--text is empty"));
+        return Err(usage("the text to translate is empty"));
     }
     let direction = resolve(
         args.source_language_code.map(|code| code.0),
