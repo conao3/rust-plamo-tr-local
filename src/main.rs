@@ -6,10 +6,9 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::{Context, anyhow};
-use clap::{ArgAction, Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::{Map, Value, json};
+use clap::{Args, Parser, Subcommand, ValueEnum};
+use serde::{Serialize, Serializer};
+use serde_json::{Value, json};
 
 use plamo_tr_local::engine::{InputError, Options, Term, Translator};
 use plamo_tr_local::lang::{LANGUAGES, parse_language, resolve};
@@ -17,8 +16,7 @@ use plamo_tr_local::model::{self, ModelSize};
 
 use output::OutputFormat;
 
-const GLOBAL_OPTIONS_WITH_VALUE: &[&str] = &["--output", "--query"];
-const INPUT_OPTIONS: &[&str] = &["cli-input-json", "generate-cli-skeleton", "help"];
+const GLOBAL_OPTIONS_WITH_VALUE: &[&str] = &["--output"];
 
 /// Translate text with PLaMo 3 Translate running on this machine.
 #[derive(Parser)]
@@ -27,10 +25,6 @@ struct Cli {
     /// Format of the output.
     #[arg(long, global = true, help_heading = "Global Options", value_enum, default_value_t = OutputFormat::Json)]
     output: OutputFormat,
-
-    /// JMESPath expression that selects part of the output.
-    #[arg(long, global = true, help_heading = "Global Options")]
-    query: Option<String>,
 
     /// Print the parameters and the full error chain to stderr.
     #[arg(long, global = true, help_heading = "Global Options")]
@@ -76,117 +70,64 @@ enum TextCommand {
 #[derive(Subcommand)]
 enum LanguageCommand {
     /// List the supported language codes.
-    ListLanguages(ListLanguagesArgs),
+    ListLanguages,
 }
 
 #[derive(Subcommand)]
 enum ModelCommand {
     /// List the model sizes and whether each one is downloaded.
-    ListModels(ListModelsArgs),
+    ListModels,
     /// Download a model into the cache directory.
     DownloadModel(DownloadModelArgs),
 }
 
-#[derive(Args, Default)]
-struct InputArgs {
-    /// Read the parameters from JSON (PascalCase keys). Parameters given on
-    /// the command line take precedence.
-    #[arg(long, value_parser = parse_value)]
-    cli_input_json: Option<String>,
-
-    /// Print a JSON skeleton of the input or the output and exit.
-    #[arg(long, value_enum, num_args = 0..=1, default_missing_value = "input")]
-    generate_cli_skeleton: Option<Skeleton>,
-}
-
-#[derive(Clone, Copy, ValueEnum)]
-enum Skeleton {
-    Input,
-    Output,
-}
-
-#[derive(Args, Serialize, Deserialize, Default)]
-#[serde(rename_all = "PascalCase", deny_unknown_fields)]
+#[derive(Args)]
 struct TranslateTextArgs {
     /// Text to translate. Read from standard input when omitted.
     #[arg(long, value_parser = parse_value)]
-    #[serde(skip_serializing_if = "Option::is_none")]
     text: Option<String>,
 
     /// Source language code (detected when omitted).
     #[arg(long, value_parser = parse_language_code)]
-    #[serde(skip_serializing_if = "Option::is_none")]
     source_language_code: Option<LanguageCode>,
 
     /// Target language code (en for Japanese text, ja otherwise).
     #[arg(long, value_parser = parse_language_code)]
-    #[serde(skip_serializing_if = "Option::is_none")]
     target_language_code: Option<LanguageCode>,
 
     /// Writing style of the translation.
     #[arg(long, value_enum)]
-    #[serde(skip_serializing_if = "Option::is_none")]
     writing_style: Option<WritingStyle>,
 
     /// Text that helps the model read the input, such as the surrounding
     /// paragraphs or the kind of page.
     #[arg(long, value_parser = parse_value)]
-    #[serde(skip_serializing_if = "Option::is_none")]
     context: Option<String>,
 
     /// Translations of terms, as Source=<term>,Target=<translation> separated
     /// by spaces.
     #[arg(long, num_args = 1.., value_parser = parse_term)]
-    #[serde(skip_serializing_if = "Option::is_none")]
     glossary: Option<Vec<GlossaryTerm>>,
 
     /// Size of the model, downloaded into the cache on first use (2b when
     /// omitted).
     #[arg(long, value_enum)]
-    #[serde(skip_serializing_if = "Option::is_none")]
     model_size: Option<ModelSizeArg>,
 
     /// GGUF file of PLaMo 3 Translate to use instead of a cached model.
     /// Defaults to $PLAMO_TR_LOCAL_MODEL_FILE.
     #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
     model_file: Option<PathBuf>,
-
-    #[command(flatten)]
-    #[serde(skip)]
-    input: InputArgs,
 }
 
-#[derive(Args, Serialize, Deserialize, Default)]
-#[serde(rename_all = "PascalCase", deny_unknown_fields)]
-struct ListLanguagesArgs {
-    #[command(flatten)]
-    #[serde(skip)]
-    input: InputArgs,
-}
-
-#[derive(Args, Serialize, Deserialize, Default)]
-#[serde(rename_all = "PascalCase", deny_unknown_fields)]
-struct ListModelsArgs {
-    #[command(flatten)]
-    #[serde(skip)]
-    input: InputArgs,
-}
-
-#[derive(Args, Serialize, Deserialize, Default)]
-#[serde(rename_all = "PascalCase", deny_unknown_fields)]
+#[derive(Args)]
 struct DownloadModelArgs {
     /// Size of the model to download (2b when omitted).
     #[arg(long, value_enum)]
-    #[serde(skip_serializing_if = "Option::is_none")]
     model_size: Option<ModelSizeArg>,
-
-    #[command(flatten)]
-    #[serde(skip)]
-    input: InputArgs,
 }
 
-#[derive(Clone, Copy, Default, ValueEnum, Serialize, Deserialize)]
+#[derive(Clone, Copy, Default, ValueEnum, Serialize)]
 enum ModelSizeArg {
     #[value(name = "0.8b")]
     #[serde(rename = "0.8b")]
@@ -214,8 +155,7 @@ impl From<ModelSizeArg> for ModelSize {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "PascalCase", deny_unknown_fields)]
+#[derive(Clone)]
 struct GlossaryTerm {
     source: String,
     target: String,
@@ -240,7 +180,7 @@ fn parse_term(value: &str) -> Result<GlossaryTerm, String> {
     }
 }
 
-#[derive(Clone, Copy, ValueEnum, Serialize, Deserialize)]
+#[derive(Clone, Copy, ValueEnum, Serialize)]
 #[serde(rename_all = "lowercase")]
 enum WritingStyle {
     Plain,
@@ -262,13 +202,6 @@ struct LanguageCode(&'static str);
 impl Serialize for LanguageCode {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(self.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for LanguageCode {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let value = String::deserialize(deserializer)?;
-        parse_language_code(&value).map_err(serde::de::Error::custom)
     }
 }
 
@@ -388,72 +321,6 @@ fn rewrite_help(mut args: Vec<OsString>) -> Vec<OsString> {
     args
 }
 
-fn subcommand_path(matches: &clap::ArgMatches) -> Vec<String> {
-    let mut path = Vec::new();
-    let mut current = matches;
-    while let Some((name, sub)) = current.subcommand() {
-        path.push(name.to_owned());
-        current = sub;
-    }
-    path
-}
-
-fn pascal_case(kebab: &str) -> String {
-    kebab
-        .split('-')
-        .map(|word| {
-            let mut chars = word.chars();
-            match chars.next() {
-                Some(first) => first.to_ascii_uppercase().to_string() + chars.as_str(),
-                None => String::new(),
-            }
-        })
-        .collect()
-}
-
-/// The input skeleton of a subcommand, derived from its clap definition.
-fn input_skeleton(path: &[String]) -> Value {
-    let mut command = Cli::command();
-    for name in path {
-        command = command
-            .find_subcommand(name)
-            .expect("subcommand path comes from the parsed arguments")
-            .clone();
-    }
-    let mut skeleton = Map::new();
-    for arg in command.get_arguments() {
-        let Some(long) = arg.get_long() else { continue };
-        if INPUT_OPTIONS.contains(&long) || arg.is_global_set() {
-            continue;
-        }
-        let value = match arg.get_action() {
-            ArgAction::SetTrue | ArgAction::SetFalse => json!(false),
-            _ if long == "glossary" => json!([{"Source": "", "Target": ""}]),
-            _ => match arg.get_possible_values().first() {
-                Some(possible) => json!(possible.get_name()),
-                None => json!(""),
-            },
-        };
-        skeleton.insert(pascal_case(long), value);
-    }
-    Value::Object(skeleton)
-}
-
-/// Overlay the parameters given on the command line onto `--cli-input-json`.
-fn merge_input<T: Serialize + DeserializeOwned>(args: &T, input: &InputArgs) -> Result<T, Failure> {
-    let given = serde_json::to_value(args).map_err(|error| Failure::Other(error.into()))?;
-    let Some(json) = &input.cli_input_json else {
-        return serde_json::from_value(given).map_err(usage);
-    };
-    let mut merged: Value = serde_json::from_str(json)
-        .map_err(|error| usage(format!("--cli-input-json is not valid JSON: {error}")))?;
-    let (Value::Object(merged_map), Value::Object(given_map)) = (&mut merged, given) else {
-        return Err(usage("--cli-input-json must be a JSON object"));
-    };
-    merged_map.extend(given_map);
-    serde_json::from_value(merged).map_err(|error| usage(format!("--cli-input-json: {error}")))
-}
-
 fn model_file(file: Option<PathBuf>, size: Option<ModelSizeArg>) -> anyhow::Result<PathBuf> {
     match file.or_else(|| std::env::var_os("PLAMO_TR_LOCAL_MODEL_FILE").map(PathBuf::from)) {
         Some(path) => Ok(path),
@@ -562,132 +429,36 @@ fn to_value(output: impl Serialize) -> Result<Value, Failure> {
     serde_json::to_value(output).map_err(|error| Failure::Other(error.into()))
 }
 
-/// Run the subcommand. `None` means a skeleton was printed instead.
-fn run(cli: Cli, path: &[String]) -> Result<Option<Value>, Failure> {
-    let (input, output_skeleton) = match &cli.command {
+fn run(command: Command, debug: bool) -> Result<Value, Failure> {
+    match command {
         Command::Text {
             command: TextCommand::TranslateText(args),
-        } => (
-            &args.input,
-            to_value(TranslateTextOutput {
-                translated_text: String::new(),
-                source_language_code: Some(""),
-                target_language_code: "",
-            })?,
-        ),
+        } => translate_text(args, debug),
         Command::Language {
-            command: LanguageCommand::ListLanguages(args),
-        } => (
-            &args.input,
-            to_value(ListLanguagesOutput {
-                languages: vec![LanguageOutput {
-                    language_code: "",
-                    language_name: "",
-                }],
-            })?,
-        ),
+            command: LanguageCommand::ListLanguages,
+        } => to_value(list_languages()),
         Command::Model {
-            command: ModelCommand::ListModels(args),
-        } => (
-            &args.input,
-            to_value(ListModelsOutput {
-                models: vec![ModelOutput {
-                    model_size: "",
-                    url: String::new(),
-                    path: PathBuf::new(),
-                    downloaded: false,
-                }],
-            })?,
-        ),
+            command: ModelCommand::ListModels,
+        } => to_value(list_models()?),
         Command::Model {
             command: ModelCommand::DownloadModel(args),
-        } => (
-            &args.input,
-            to_value(DownloadModelOutput {
-                model_size: "",
-                path: PathBuf::new(),
-            })?,
-        ),
-    };
-    match input.generate_cli_skeleton {
-        Some(Skeleton::Input) => {
-            println!("{}", output::json(&input_skeleton(path)));
-            return Ok(None);
-        }
-        Some(Skeleton::Output) => {
-            println!("{}", output::json(&output_skeleton));
-            return Ok(None);
-        }
-        None => {}
+        } => to_value(download_model(args)?),
     }
-    let value = match cli.command {
-        Command::Text {
-            command: TextCommand::TranslateText(args),
-        } => {
-            let args = merge_input(&args, &args.input)?;
-            translate_text(args, cli.debug)?
-        }
-        Command::Language {
-            command: LanguageCommand::ListLanguages(args),
-        } => {
-            merge_input(&args, &args.input)?;
-            to_value(list_languages())?
-        }
-        Command::Model {
-            command: ModelCommand::ListModels(args),
-        } => {
-            merge_input(&args, &args.input)?;
-            to_value(list_models()?)?
-        }
-        Command::Model {
-            command: ModelCommand::DownloadModel(args),
-        } => {
-            let args = merge_input(&args, &args.input)?;
-            to_value(download_model(args)?)?
-        }
-    };
-    Ok(Some(value))
 }
 
 fn main() -> ExitCode {
     let args = rewrite_help(std::env::args_os().collect());
-    let matches = match Cli::command().try_get_matches_from(args) {
-        Ok(matches) => matches,
+    let cli = match Cli::try_parse_from(args) {
+        Ok(cli) => cli,
         Err(error) => {
             let _ = error.print();
             return ExitCode::from(if error.use_stderr() { 252 } else { 0 });
         }
     };
-    let path = subcommand_path(&matches);
-    let cli = match Cli::from_arg_matches(&matches) {
-        Ok(cli) => cli,
-        Err(error) => {
-            let _ = error.print();
-            return ExitCode::from(252);
-        }
-    };
     let format = cli.output;
     let debug = cli.debug;
-    let query = match cli.query.as_deref().map(jmespath::compile).transpose() {
-        Ok(query) => query,
-        Err(error) => {
-            eprintln!("error: invalid --query: {error}");
-            return ExitCode::from(252);
-        }
-    };
-    let result = run(cli, &path).and_then(|value| {
-        let Some(value) = value else { return Ok(()) };
-        let value = match &query {
-            Some(query) => {
-                let found = query
-                    .search(&value)
-                    .map_err(|error| usage(format!("--query: {error}")))?;
-                serde_json::to_value(&*found).map_err(|error| Failure::Other(error.into()))?
-            }
-            None => value,
-        };
+    let result = run(cli.command, debug).map(|value| {
         println!("{}", output::render(&value, format));
-        Ok(())
     });
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -751,70 +522,6 @@ mod tests {
     }
 
     #[test]
-    fn input_skeleton_is_accepted_as_cli_input_json() {
-        let path = ["text".to_owned(), "translate-text".to_owned()];
-        let skeleton = input_skeleton(&path);
-        assert_eq!(
-            skeleton,
-            json!({
-                "Text": "",
-                "SourceLanguageCode": "",
-                "TargetLanguageCode": "",
-                "WritingStyle": "plain",
-                "Context": "",
-                "Glossary": [{"Source": "", "Target": ""}],
-                "ModelSize": "0.8b",
-                "ModelFile": "",
-            })
-        );
-        let mut keys: Map<String, Value> = skeleton.as_object().unwrap().clone();
-        keys.insert("SourceLanguageCode".into(), json!("ja"));
-        keys.insert("TargetLanguageCode".into(), json!("en"));
-        let input = InputArgs {
-            cli_input_json: Some(Value::Object(keys).to_string()),
-            generate_cli_skeleton: None,
-        };
-        assert!(merge_input(&TranslateTextArgs::default(), &input).is_ok());
-    }
-
-    #[test]
-    fn command_line_overrides_cli_input_json() {
-        let cli = parse(&[
-            "plamo-tr-local",
-            "text",
-            "translate-text",
-            "--target-language-code",
-            "ko",
-            "--cli-input-json",
-            r#"{"Text":"Hello","TargetLanguageCode":"fr"}"#,
-        ])
-        .unwrap();
-        let Command::Text {
-            command: TextCommand::TranslateText(args),
-        } = cli.command
-        else {
-            panic!("parsed another command");
-        };
-        let merged = merge_input(&args, &args.input).ok().unwrap();
-        assert_eq!(merged.text.as_deref(), Some("Hello"));
-        assert_eq!(merged.target_language_code.map(|code| code.0), Some("ko"));
-    }
-
-    #[test]
-    fn cli_input_json_rejects_unknown_keys_and_languages() {
-        for json in [r#"{"Txt":"Hello"}"#, r#"{"TargetLanguageCode":"xx"}"#] {
-            let input = InputArgs {
-                cli_input_json: Some(json.to_owned()),
-                generate_cli_skeleton: None,
-            };
-            let failure = merge_input(&TranslateTextArgs::default(), &input)
-                .err()
-                .expect("invalid input");
-            assert_eq!(failure.exit_code(), 252);
-        }
-    }
-
-    #[test]
     fn reads_values_from_files() {
         let path = std::env::temp_dir().join("plamo-tr-local-parse-value-test.txt");
         std::fs::write(&path, "こんにちは").unwrap();
@@ -843,7 +550,7 @@ mod tests {
     }
 
     #[test]
-    fn glossary_takes_shorthand_and_json() {
+    fn glossary_takes_shorthand() {
         let cli = parse(&[
             "plamo-tr-local",
             "text",
@@ -865,13 +572,5 @@ mod tests {
         assert_eq!(glossary.len(), 2);
         assert_eq!(glossary[0].target, "担当者");
         assert!(parse_term("Source=owner").is_err());
-        let input = InputArgs {
-            cli_input_json: Some(
-                r#"{"Glossary":[{"Source":"owner","Target":"担当者"}],"ModelSize":"8b"}"#
-                    .to_owned(),
-            ),
-            generate_cli_skeleton: None,
-        };
-        assert!(merge_input(&TranslateTextArgs::default(), &input).is_ok());
     }
 }

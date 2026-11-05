@@ -24,8 +24,8 @@
 `plamo-tr-local` translates text in your terminal with [PLaMo 3 Translate](https://huggingface.co/pfnet/plamo-3-translate-2b), the translation model by Preferred Networks. It runs the model on your own machine through [llama.cpp](https://github.com/ggml-org/llama.cpp).
 
 - **Your text stays on your machine.** You need no account and no API key.
-- **It follows the AWS CLI grammar.** You get `<command> <subcommand>` with named parameters, JSON output, `--query`, `--output text`, and `--cli-input-json`.
-- **It fits a shell pipeline.** Pipe text in and pick the translation out with a JMESPath query.
+- **It follows the AWS CLI grammar.** You get `<command> <subcommand>` with named parameters, JSON output, and `--output text` or `--output table`.
+- **It fits a shell pipeline.** Pipe text in and pick the translation out of the JSON with `jq`.
 - **You pick the model size.** Choose from `0.8b` to `31b`. On the first run, `plamo-tr-local` downloads the model from Hugging Face into your cache directory.
 
 Built with PLaMo.
@@ -61,11 +61,11 @@ $ plamo-tr-local text translate-text --text 今日はいい天気ですね。
 }
 ```
 
-Omit `--text` to read the text from standard input, and print only the translation with `--query` and `--output text`:
+Omit `--text` to read the text from standard input, and print only the translation with `jq`:
 
 ```console
 $ echo "Since it's raining today, I think I'll relax at home and read a book." \
-    | plamo-tr-local text translate-text --query TranslatedText --output text
+    | plamo-tr-local text translate-text | jq -r .TranslatedText
 今日は雨だから、家でゆっくり本を読んでいようと思う。
 ```
 
@@ -73,7 +73,7 @@ Fix the translation of a term with `--glossary`, and set the writing style of Ja
 
 ```console
 $ plamo-tr-local text translate-text --text "Filter tasks by owner." \
-    --glossary Source=owner,Target=担当者 --writing-style polite --query TranslatedText --output text
+    --glossary Source=owner,Target=担当者 --writing-style polite | jq -r .TranslatedText
 担当者でタスクを絞り込みます。
 ```
 
@@ -115,21 +115,15 @@ The model reads up to 32,768 tokens of input and output together. For a long tex
 
 `model download-model --model-size <SIZE>` downloads a model into the cache before your first translation. `model list-models` shows where each model lives and whether you have downloaded it.
 
-### Input from JSON and files
+### Input from files
 
-Every subcommand also takes:
-
-- `--cli-input-json <JSON>`: all parameters as one JSON object whose keys are the parameter names in PascalCase (`Text`, `SourceLanguageCode`, `Glossary`, ...). Parameters given on the command line take precedence.
-- `--generate-cli-skeleton [input|output]`: print a JSON skeleton of the input (default) or the output and exit.
-
-A value that starts with `file://` names a file to read, for example `--text file://article.txt` or `--cli-input-json file://input.json`.
+A value of `--text` or `--context` that starts with `file://` names a file to read, for example `--text file://article.txt`.
 
 ### Global options
 
 | Option | Meaning |
 |---|---|
 | `--output <json\|text\|table>` | Output format. Defaults to `json`. `text` prints the values of an object tab-separated on one line and each list item on its own line. |
-| `--query <JMESPath>` | Select part of the output with a [JMESPath](https://jmespath.org/) expression, for example `TranslatedText`. |
 | `--debug` | Print the parameters, the llama.cpp log, the model load time, the token counts and timings (to the first token and of the whole output), and the full error chain to stderr. |
 | `--version` | Print the version. |
 
@@ -148,7 +142,7 @@ A value that starts with `file://` names a file to read, for example `--text fil
 | Exit code | Meaning |
 |---|---|
 | 0 | Success. |
-| 252 | The command line or a parameter is invalid (unknown command or parameter, unsupported language code, missing `--text` while standard input is a terminal, empty text, `--writing-style` without the target `ja`, invalid `--cli-input-json` or `--query`). |
+| 252 | The command line or a parameter is invalid (unknown command or parameter, unsupported language code, missing `--text` while standard input is a terminal, empty text, or `--writing-style` without the target `ja`). |
 | 254 | The model cannot take the input: the language pair is not supported, the input contains the model's reserved tokens (`<\|plamo:`), or a line is too long. |
 | 255 | Any other failure, such as a failed download or an unreadable model file. |
 
