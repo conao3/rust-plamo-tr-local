@@ -55,7 +55,7 @@ Translate Japanese into English. `plamo-tr-local` prints JSON unless you ask for
 ```console
 $ plamo-tr-local text translate-text --text 今日はいい天気ですね。
 {
-  "TranslatedText": "It's a nice day today, isn't it?",
+  "TranslatedText": "The weather is nice today, isn't it?",
   "SourceLanguageCode": null,
   "TargetLanguageCode": "en"
 }
@@ -66,7 +66,7 @@ Read the text from standard input, and print only the translation with `--query`
 ```console
 $ echo "Since it's raining today, I think I'll relax at home and read a book." \
     | plamo-tr-local text translate-text --text file:///dev/stdin --query TranslatedText --output text
-今日は雨だから、家でくつろいで本を読もうと思う。
+今日は雨だから、家でゆっくり本を読んでいようと思う。
 ```
 
 Fix the translation of a term with `--glossary`, and set the writing style of Japanese with `--writing-style`:
