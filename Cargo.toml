@@ -1,0 +1,19 @@
+[package]
+name = "plamo-tr-local"
+version = "0.1.0"
+edition = "2024"
+description = "Translate text from the command line with PLaMo 3 Translate running on your machine"
+license = "Apache-2.0"
+repository = "https://github.com/conao3/rust-plamo-tr-local"
+
+[dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.6.7", features = ["derive", "env"] }
+dirs = "7.0.0"
+jmespath = "0.5.0"
+llama-cpp-2 = { git = "https://github.com/utilityai/llama-cpp-rs", rev = "0364f5da1c6a6ee37f507031f116ce4a09b28594", version = "0.1.162" }
+reqwest = { version = "0.13.5", default-features = false, features = ["blocking", "rustls"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt"] }
+whatlang = "0.18.0"
