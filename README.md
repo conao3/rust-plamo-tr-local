@@ -163,7 +163,7 @@ A value that starts with `file://` names a file to read, for example `--text fil
 | `8b` | 5.28 GB |
 | `31b` | about 19.5 GB |
 
-On an Intel Core Ultra 5 225U (CPU only), translating one English sentence of about 20 words into Japanese takes about 7 seconds with `0.8b` and 17 seconds with `2b`, including loading the model.
+On an Intel Core Ultra 5 225U (CPU only, 7 threads), translating the MIT License (169 words) into Japanese takes about 7 seconds with `0.8b` and 17 seconds with `2b`, including loading the model. `0.8b` loads in 2.8 seconds, gives the first token 0.8 seconds later, and writes 67 tokens per second; `2b` loads in 3.2 seconds, gives the first token 3.2 seconds later, and writes 21 tokens per second.
 
 The x86_64 Linux build targets `x86-64-v3` (AVX2, from Intel Haswell and AMD Excavator on), so llama.cpp uses the vector instructions.
 
