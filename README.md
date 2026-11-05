@@ -24,7 +24,7 @@
 `plamo-tr-local` translates text in your terminal with [PLaMo 3 Translate](https://huggingface.co/pfnet/plamo-3-translate-2b), the translation model by Preferred Networks. It runs the model on your own machine through [llama.cpp](https://github.com/ggml-org/llama.cpp).
 
 - **Your text stays on your machine.** You need no account and no API key.
-- **It speaks the [plamo-tr](https://github.com/conao3/rust-plamo-tr) command line.** You get `<command> <subcommand>` with named parameters, JSON output, `--query`, `--output text`, and `--cli-input-json`. A `plamo-tr text translate-text` call without `--auth-file` runs unchanged under `plamo-tr-local`.
+- **It follows the AWS CLI grammar.** You get `<command> <subcommand>` with named parameters, JSON output, `--query`, `--output text`, and `--cli-input-json`.
 - **It fits a shell pipeline.** Pipe text in and pick the translation out with a JMESPath query.
 - **You pick the model size.** Choose from `0.8b` to `31b`. On the first run, `plamo-tr-local` downloads the model from Hugging Face into your cache directory.
 
@@ -141,7 +141,7 @@ A value that starts with `file://` names a file to read, for example `--text fil
 |---|---|
 | `PLAMO_TR_LOCAL_MODEL_FILE` | GGUF file to use when `--model-file` is not given. |
 | `PLAMO_TR_LOCAL_CACHE_DIR` | Directory for downloaded models. Defaults to `plamo-tr-local` in the user cache directory (`~/.cache/plamo-tr-local` on Linux). |
-| `PLAMO_TR_LOCAL_THREADS` | Number of CPU threads. Defaults to half the logical CPUs. |
+| `PLAMO_TR_LOCAL_THREADS` | Number of CPU threads. Defaults to three quarters of the logical CPUs. |
 
 ### Exit codes
 
@@ -163,7 +163,7 @@ A value that starts with `file://` names a file to read, for example `--text fil
 | `8b` | 5.28 GB |
 | `31b` | about 19.5 GB |
 
-On an Intel Core Ultra 5 225U (CPU only, 7 threads), translating the MIT License (169 words) into Japanese takes about 7 seconds with `0.8b` and 17 seconds with `2b`, including loading the model. `0.8b` loads in 2.8 seconds, gives the first token 0.8 seconds later, and writes 67 tokens per second; `2b` loads in 3.2 seconds, gives the first token 3.2 seconds later, and writes 21 tokens per second.
+On an Intel Core Ultra 5 225U (CPU only, 10 threads), translating the MIT License (169 words) into Japanese takes about 7 seconds with `0.8b` and 16 seconds with `2b`, including loading the model. `0.8b` loads in 2.8 seconds, gives the first token 0.7 seconds later, and writes 71 tokens per second; `2b` loads in 3.4 seconds, gives the first token 2.9 seconds later, and writes 23 tokens per second.
 
 The x86_64 Linux build targets `x86-64-v3` (AVX2, from Intel Haswell and AMD Excavator on), so llama.cpp uses the vector instructions.
 

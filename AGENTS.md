@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`plamo-tr-local` is a Rust CLI that translates text with the PLaMo 3 Translate GGUF models running locally through llama.cpp (the `llama-cpp-2` crate). Its command line matches `plamo-tr` (`conao3/rust-plamo-tr`), which calls the PLaMo Translate service.
+`plamo-tr-local` is a Rust CLI that translates text with the PLaMo 3 Translate GGUF models running locally through llama.cpp (the `llama-cpp-2` crate).
 
 ## Layout
 
@@ -14,7 +14,7 @@
 ## Conventions
 
 - The prompt follows the `chat_template.jinja` that ships with the GGUF repositories: language codes are lowercase (`zh-hans`), and `form` goes only with the target `ja`.
-- Either the source or the target must be `ja` or `en`, as in `plamo-tr`.
+- Either the source or the target must be `ja` or `en`.
 - The command line follows the AWS CLI grammar: `<command> <subcommand>` with named `--kebab-case` parameters only, PascalCase keys in the output and in `--cli-input-json`, and exit codes 0 / 252 (command line or parameter) / 254 (input the model cannot take) / 255 (other). A new parameter is a field of the subcommand's `Args` struct; its help, skeleton entry, and `--cli-input-json` key follow from that field.
 - `llama-cpp-2` is a git dependency pinned to a revision whose llama.cpp reads the `plamo3` tokenizer. After changing the revision, update `outputHashes` in `flake.nix`.
 - `.cargo/config.toml` builds x86_64 Linux for `x86-64-v3`; llama.cpp picks its CPU kernels from the Rust target features.

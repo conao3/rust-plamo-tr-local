@@ -196,7 +196,7 @@ impl Translator {
             .and_then(|value| value.parse().ok())
             .unwrap_or_else(|| {
                 std::thread::available_parallelism()
-                    .map_or(4, |n| (n.get() / 2).max(1))
+                    .map_or(4, |n| (n.get() * 3 / 4).max(1))
                     .try_into()
                     .unwrap_or(4)
             });
