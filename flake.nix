@@ -30,9 +30,11 @@
             };
             nativeBuildInputs = [
               pkgs.cmake
+              pkgs.pkg-config
               pkgs.rustPlatform.bindgenHook
             ];
             dontUseCmakeConfigure = true;
+            buildInputs = [ pkgs.aws-lc ];
             meta = {
               description = "Translate text from the command line with PLaMo 3 Translate running on your machine";
               homepage = "https://github.com/conao3/rust-plamo-tr-local";
