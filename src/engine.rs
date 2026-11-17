@@ -173,9 +173,6 @@ pub struct Translator {
 }
 
 impl Translator {
-    /// Load the model at `path`, with `gpu_layers` of its layers on the GPU
-    /// (all of them when `None`). Without a GPU backend the model runs on the
-    /// CPU.
     pub fn load(path: &Path, gpu_layers: Option<u32>, logs: bool) -> Result<Self> {
         if logs {
             let _ = tracing_subscriber::fmt()
