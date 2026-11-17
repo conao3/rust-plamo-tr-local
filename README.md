@@ -48,6 +48,15 @@ Or build it with Cargo. Cargo compiles llama.cpp along the way, so you need CMak
 $ cargo install --git https://github.com/conao3/rust-plamo-tr-local
 ```
 
+To run the model on a GPU through Vulkan, install the `vulkan` package of the flake, or build with the `vulkan` feature (Cargo then also needs the Vulkan headers, the Vulkan loader, and `glslc` from shaderc):
+
+```console
+$ nix profile install github:conao3/rust-plamo-tr-local#vulkan
+$ cargo install --git https://github.com/conao3/rust-plamo-tr-local --features vulkan
+```
+
+The Vulkan build puts every layer of the model on the GPU unless you set `--gpu-layers`.
+
 Your first translation downloads the `2b` model (1.81 GB) from Hugging Face into your cache directory. Run `plamo-tr-local model download-model` to download it ahead of time.
 
 ## Usage
@@ -85,6 +94,15 @@ Trade speed for accuracy with `--model-size`. Smaller models run faster, and lar
 $ plamo-tr-local text translate-text --model-size 0.8b --text 今日はいい天気ですね。
 ```
 
+Translate many texts with the model loaded once. `batch-translate-text` reads one JSON object per line and writes each translation as soon as it is done:
+
+```console
+$ printf '%s\n' '{"Id": 1, "Text": "Configure your index"}' '{"Id": 2, "Text": "Delete an index"}' \
+    | plamo-tr-local text batch-translate-text --target-language-code ja
+{"Id":1,"TranslatedText":"インデックスを設定する"}
+{"Id":2,"TranslatedText":"インデックスを削除する"}
+```
+
 ## Commands
 
 The command line follows the grammar of the AWS CLI: `plamo-tr-local [global options] <command> <subcommand> [--parameter value ...]`. You name each parameter, and `plamo-tr-local` takes no positional arguments.
@@ -92,6 +110,7 @@ The command line follows the grammar of the AWS CLI: `plamo-tr-local [global opt
 | Command | Subcommand | Output |
 |---|---|---|
 | `text` | `translate-text` | `TranslatedText`, `SourceLanguageCode` (`null` when the model detects it), `TargetLanguageCode` |
+| `text` | `batch-translate-text` | One JSON object per input line: `Id` and `TranslatedText`, or `Id` and `Error` |
 | `language` | `list-languages` | `Languages`, a list of `LanguageCode` and `LanguageName` |
 | `model` | `list-models` | `Models`, a list of `ModelSize`, `Url`, `Path`, and `Downloaded` |
 | `model` | `download-model` | `ModelSize` and `Path` of the downloaded model |
@@ -108,10 +127,24 @@ The command line follows the grammar of the AWS CLI: `plamo-tr-local [global opt
 | `--glossary <Source=<term>,Target=<translation> ...>` | Translations of terms, separated by spaces. |
 | `--model-size <0.8b\|2b\|8b\|31b>` | Size of the model. Defaults to `2b`. |
 | `--model-file <PATH>` | A GGUF file of PLaMo 3 Translate to use instead of a cached model. Defaults to `PLAMO_TR_LOCAL_MODEL_FILE`. |
+| `--gpu-layers <N>` | Number of model layers to run on the GPU in a build with a GPU backend. Defaults to `PLAMO_TR_LOCAL_GPU_LAYERS`, or all layers. |
 
 Either the source or the target must be `ja` or `en`. If you omit the source and the target is `ja` or `en`, the model detects the source language itself. For other targets, `plamo-tr-local` detects the source language with [whatlang](https://github.com/greyblake/whatlang-rs) and passes it to the model.
 
 The model reads up to 32,768 tokens of input and output together. For a long text, `plamo-tr-local` translates a few paragraphs at a time and joins the translations with the original paragraph and line breaks.
+
+### `text batch-translate-text`
+
+`batch-translate-text` loads the model once and translates many texts. Each line of standard input is a JSON object:
+
+| Key | Meaning |
+|---|---|
+| `Text` | Text to translate. Required. |
+| `Id` | Any JSON value, copied into the output line. |
+| `Context` | Text that helps the model read this input. |
+| `Glossary` | A list of `{"Source": <term>, "Target": <translation>}`, added to `--glossary` for this input. |
+
+It takes `--source-language-code`, `--target-language-code`, `--writing-style`, `--glossary`, `--model-size`, `--model-file`, and `--gpu-layers` like `translate-text`; each applies to every line. It writes one line per input as soon as the translation is done. An input the model cannot take gets an `Error` instead of `TranslatedText`, and the remaining lines go on. A line that is not valid JSON stops the command with exit code 252.
 
 ### `model list-models` and `model download-model`
 
@@ -138,6 +171,7 @@ A value of `--text` or `--context` that starts with `file://` names a file to re
 | `PLAMO_TR_LOCAL_MODEL_FILE` | GGUF file to use when `--model-file` is not given. |
 | `PLAMO_TR_LOCAL_CACHE_DIR` | Directory for downloaded models. Defaults to `plamo-tr-local` in the user cache directory (`~/.cache/plamo-tr-local` on Linux). |
 | `PLAMO_TR_LOCAL_THREADS` | Number of CPU threads. Defaults to three quarters of the logical CPUs. |
+| `PLAMO_TR_LOCAL_GPU_LAYERS` | Number of model layers on the GPU when `--gpu-layers` is not given. Defaults to all layers. |
 
 ### Exit codes
 
@@ -165,6 +199,16 @@ Speed on an Intel Core Ultra 5 225U (CPU only, 10 threads), translating the MIT 
 |---|---|---|---|---|
 | `0.8b` | about 7 s | 2.8 s | 0.7 s after the load | 71 tokens/s |
 | `2b` | about 16 s | 3.4 s | 2.9 s after the load | 23 tokens/s |
+
+Speed on an AMD Radeon RX 570 (8 GB, Vulkan through RADV) with an Intel Core i5-8400, translating the same text:
+
+| `--model-size` | Total | Model load | First token | Output |
+|---|---|---|---|---|
+| `0.8b` | about 3.7 s | 2.1 s | 0.1 s after the load | 153 tokens/s |
+| `2b` | about 6.5 s | 2.7 s | 0.4 s after the load | 60 tokens/s |
+| `8b` | about 12 s | 2.9 s | 1.4 s after the load | 23 tokens/s |
+
+The same Core i5-8400 without the GPU (6 threads) takes about 6 s with `0.8b` (55 tokens/s) and about 17 s with `2b` (16 tokens/s).
 
 The x86_64 Linux build targets `x86-64-v3` (AVX2, from Intel Haswell and AMD Excavator on), so llama.cpp uses the vector instructions.
 

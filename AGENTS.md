@@ -5,7 +5,7 @@
 ## Layout
 
 - `src/lib.rs`: the library crate (`plamo_tr_local::engine`, `lang`, and `model`).
-- `src/main.rs`: the command table (clap derive: `text translate-text`, `language list-languages`, `model list-models`, `model download-model`, global options), `file://` values, and exit codes.
+- `src/main.rs`: the command table (clap derive: `text translate-text`, `text batch-translate-text`, `language list-languages`, `model list-models`, `model download-model`, global options), `file://` values, and exit codes.
 - `src/output.rs`: the `json`, `text`, and `table` output formats.
 - `src/lang.rs`: supported languages, local detection with whatlang, and the rules that pick the source and target.
 - `src/engine.rs`: the PFML3 prompt (context, glossary, input and output language, `form`), splitting long text into paragraphs, and greedy generation with llama.cpp.
@@ -18,6 +18,7 @@
 - The command line follows the AWS CLI grammar: `<command> <subcommand>` with named `--kebab-case` parameters only, PascalCase keys in the output, and exit codes 0 / 252 (command line or parameter) / 254 (input the model cannot take) / 255 (other). A new parameter is a field of the subcommand's `Args` struct; its help follows from that field.
 - `llama-cpp-2` is a git dependency pinned to a revision whose llama.cpp reads the `plamo3` tokenizer. After changing the revision, update `outputHashes` in `flake.nix`.
 - `.cargo/config.toml` builds x86_64 Linux for `x86-64-v3`; llama.cpp picks its CPU kernels from the Rust target features.
+- The `vulkan` Cargo feature (the flake's `packages.vulkan`) builds llama.cpp with its Vulkan backend. The default build stays CPU only. `--gpu-layers` defaults to every layer.
 - Commit messages, comments, and docs are in English.
 
 ## Verification
@@ -27,6 +28,7 @@ Run everything inside the devShell:
 ```console
 $ nix develop --command make check
 $ nix build
+$ nix build .#vulkan
 ```
 
 The tests do not load a model. To try a real translation, run `cargo run --release -- text translate-text --model-size 0.8b --text <text>`; set `PLAMO_TR_LOCAL_CACHE_DIR` to keep the downloaded model out of your user cache.

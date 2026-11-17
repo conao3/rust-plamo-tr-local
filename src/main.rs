@@ -1,13 +1,13 @@
 mod output;
 
 use std::ffi::OsString;
-use std::io::IsTerminal;
+use std::io::{BufRead, IsTerminal, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::{Context, anyhow};
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Value, json};
 
 use plamo_tr_local::engine::{InputError, Options, Term, Translator};
@@ -65,6 +65,16 @@ enum TextCommand {
     /// translated into English and anything else into Japanese. Either the
     /// source or the target must be ja or en.
     TranslateText(TranslateTextArgs),
+    /// Translate many texts with the model loaded once.
+    ///
+    /// Reads one JSON object per line from standard input, such as
+    /// {"Id": "a", "Text": "Hello", "Context": "...", "Glossary": [{"Source":
+    /// "owner", "Target": "担当者"}]}, and writes one JSON object per line,
+    /// {"Id": "a", "TranslatedText": "..."}, as soon as each text is
+    /// translated. A text the model cannot take gets {"Id": "a", "Error":
+    /// "..."} and the rest go on. Id, Context, and Glossary are optional; the
+    /// glossary of a line is added to --glossary.
+    BatchTranslateText(BatchTranslateTextArgs),
 }
 
 #[derive(Subcommand)]
@@ -109,6 +119,12 @@ struct TranslateTextArgs {
     #[arg(long, num_args = 1.., value_parser = parse_term)]
     glossary: Option<Vec<GlossaryTerm>>,
 
+    #[command(flatten)]
+    model: ModelArgs,
+}
+
+#[derive(Args)]
+struct ModelArgs {
     /// Size of the model, downloaded into the cache on first use (2b when
     /// omitted).
     #[arg(long, value_enum)]
@@ -118,6 +134,69 @@ struct TranslateTextArgs {
     /// Defaults to $PLAMO_TR_LOCAL_MODEL_FILE.
     #[arg(long)]
     model_file: Option<PathBuf>,
+
+    /// Number of model layers to run on the GPU (all of them when omitted).
+    /// Takes effect only in a build with a GPU backend, such as the vulkan
+    /// feature. Defaults to $PLAMO_TR_LOCAL_GPU_LAYERS.
+    #[arg(long)]
+    gpu_layers: Option<u32>,
+}
+
+impl ModelArgs {
+    fn load(self, debug: bool) -> anyhow::Result<Translator> {
+        let path = model_file(self.model_file, self.model_size)?;
+        let gpu_layers = match self.gpu_layers {
+            Some(layers) => Some(layers),
+            None => match std::env::var("PLAMO_TR_LOCAL_GPU_LAYERS") {
+                Ok(value) => Some(value.parse().with_context(|| {
+                    format!("PLAMO_TR_LOCAL_GPU_LAYERS is not a number: {value}")
+                })?),
+                Err(_) => None,
+            },
+        };
+        Translator::load(&path, gpu_layers, debug)
+    }
+}
+
+#[derive(Args)]
+struct BatchTranslateTextArgs {
+    /// Source language code (detected for each text when omitted).
+    #[arg(long, value_parser = parse_language_code)]
+    source_language_code: Option<LanguageCode>,
+
+    /// Target language code (en for Japanese text, ja otherwise).
+    #[arg(long, value_parser = parse_language_code)]
+    target_language_code: Option<LanguageCode>,
+
+    /// Writing style of the translations.
+    #[arg(long, value_enum)]
+    writing_style: Option<WritingStyle>,
+
+    /// Translations of terms used for every text, as
+    /// Source=<term>,Target=<translation> separated by spaces.
+    #[arg(long, num_args = 1.., value_parser = parse_term)]
+    glossary: Option<Vec<GlossaryTerm>>,
+
+    #[command(flatten)]
+    model: ModelArgs,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase", deny_unknown_fields)]
+struct BatchInput {
+    #[serde(default)]
+    id: Value,
+    text: String,
+    context: Option<String>,
+    #[serde(default)]
+    glossary: Vec<BatchTerm>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase", deny_unknown_fields)]
+struct BatchTerm {
+    source: String,
+    target: String,
 }
 
 #[derive(Args)]
@@ -336,8 +415,9 @@ fn translate_text(args: TranslateTextArgs, debug: bool) -> Result<Value, Failure
                 "SourceLanguageCode": args.source_language_code,
                 "TargetLanguageCode": args.target_language_code,
                 "WritingStyle": args.writing_style,
-                "ModelSize": args.model_size,
-                "ModelFile": args.model_file,
+                "ModelSize": args.model.model_size,
+                "ModelFile": args.model.model_file,
+                "GpuLayers": args.model.gpu_layers,
             }))
             .unwrap_or_default()
         );
@@ -366,8 +446,7 @@ fn translate_text(args: TranslateTextArgs, debug: bool) -> Result<Value, Failure
     if args.writing_style.is_some() && direction.target != "ja" {
         return Err(usage("--writing-style needs --target-language-code ja"));
     }
-    let path = model_file(args.model_file, args.model_size)?;
-    let translator = Translator::load(&path, debug)?;
+    let translator = args.model.load(debug)?;
     let glossary: Vec<Term> = args
         .glossary
         .unwrap_or_default()
@@ -389,6 +468,76 @@ fn translate_text(args: TranslateTextArgs, debug: bool) -> Result<Value, Failure
         source_language_code: direction.source,
         target_language_code: direction.target,
     })
+}
+
+fn batch_translate_text(args: BatchTranslateTextArgs, debug: bool) -> Result<(), Failure> {
+    if std::io::stdin().is_terminal() {
+        return Err(usage(
+            "batch-translate-text reads JSON lines from standard input, which is a terminal",
+        ));
+    }
+    let writing_style = args.writing_style.map(WritingStyle::as_str);
+    if writing_style.is_some() && args.target_language_code.is_some_and(|code| code.0 != "ja") {
+        return Err(usage("--writing-style needs --target-language-code ja"));
+    }
+    let translator = args.model.load(debug)?;
+    let shared: Vec<Term> = args
+        .glossary
+        .unwrap_or_default()
+        .into_iter()
+        .map(|term| Term {
+            source: term.source,
+            target: term.target,
+        })
+        .collect();
+    let mut stdout = std::io::stdout().lock();
+    for (number, line) in std::io::stdin().lock().lines().enumerate() {
+        let line = line.context("failed to read standard input")?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let input: BatchInput = serde_json::from_str(&line)
+            .map_err(|error| usage(format!("line {}: {error}", number + 1)))?;
+        let mut glossary: Vec<Term> = shared
+            .iter()
+            .map(|term| Term {
+                source: term.source.clone(),
+                target: term.target.clone(),
+            })
+            .collect();
+        glossary.extend(input.glossary.into_iter().map(|term| Term {
+            source: term.source,
+            target: term.target,
+        }));
+        let text = input.text.trim();
+        let result = resolve(
+            args.source_language_code.map(|code| code.0),
+            args.target_language_code.map(|code| code.0),
+            text,
+        )
+        .and_then(|direction| {
+            translator.translate(
+                text,
+                &Options {
+                    direction: &direction,
+                    writing_style: writing_style.filter(|_| direction.target == "ja"),
+                    context: input.context.as_deref(),
+                    glossary: &glossary,
+                },
+            )
+        });
+        let output = match result {
+            Ok(translated_text) => json!({"Id": input.id, "TranslatedText": translated_text}),
+            Err(error) if error.downcast_ref::<InputError>().is_some() => {
+                json!({"Id": input.id, "Error": format!("{error:#}")})
+            }
+            Err(error) => return Err(Failure::Other(error)),
+        };
+        writeln!(stdout, "{output}")
+            .and_then(|()| stdout.flush())
+            .context("failed to write standard output")?;
+    }
+    Ok(())
 }
 
 fn list_languages() -> ListLanguagesOutput {
@@ -429,20 +578,23 @@ fn to_value(output: impl Serialize) -> Result<Value, Failure> {
     serde_json::to_value(output).map_err(|error| Failure::Other(error.into()))
 }
 
-fn run(command: Command, debug: bool) -> Result<Value, Failure> {
+fn run(command: Command, debug: bool) -> Result<Option<Value>, Failure> {
     match command {
         Command::Text {
             command: TextCommand::TranslateText(args),
-        } => translate_text(args, debug),
+        } => translate_text(args, debug).map(Some),
+        Command::Text {
+            command: TextCommand::BatchTranslateText(args),
+        } => batch_translate_text(args, debug).map(|()| None),
         Command::Language {
             command: LanguageCommand::ListLanguages,
-        } => to_value(list_languages()),
+        } => to_value(list_languages()).map(Some),
         Command::Model {
             command: ModelCommand::ListModels,
-        } => to_value(list_models()?),
+        } => to_value(list_models()?).map(Some),
         Command::Model {
             command: ModelCommand::DownloadModel(args),
-        } => to_value(download_model(args)?),
+        } => to_value(download_model(args)?).map(Some),
     }
 }
 
@@ -458,7 +610,9 @@ fn main() -> ExitCode {
     let format = cli.output;
     let debug = cli.debug;
     let result = run(cli.command, debug).map(|value| {
-        println!("{}", output::render(&value, format));
+        if let Some(value) = value {
+            println!("{}", output::render(&value, format));
+        }
     });
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -547,6 +701,20 @@ mod tests {
             value["Languages"][0],
             json!({"LanguageCode": "ja", "LanguageName": "Japanese"})
         );
+    }
+
+    #[test]
+    fn batch_lines_take_optional_fields() {
+        let input: BatchInput = serde_json::from_str(
+            r#"{"Id": 3, "Text": "Hello", "Glossary": [{"Source": "a", "Target": "b"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(input.id, json!(3));
+        assert_eq!(input.glossary[0].target, "b");
+        assert!(input.context.is_none());
+        let input: BatchInput = serde_json::from_str(r#"{"Text": "Hello"}"#).unwrap();
+        assert!(input.id.is_null());
+        assert!(serde_json::from_str::<BatchInput>(r#"{"Text": "Hi", "Txt": 1}"#).is_err());
     }
 
     #[test]

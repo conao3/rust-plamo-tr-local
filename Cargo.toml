@@ -6,6 +6,9 @@ description = "Translate text from the command line with PLaMo 3 Translate runni
 license = "Apache-2.0"
 repository = "https://github.com/conao3/rust-plamo-tr-local"
 
+[features]
+vulkan = ["llama-cpp-2/vulkan"]
+
 [dependencies]
 anyhow = "1.0.104"
 clap = { version = "4.6.7", features = ["derive", "env"] }

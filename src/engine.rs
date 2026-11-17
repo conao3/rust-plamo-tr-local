@@ -173,7 +173,10 @@ pub struct Translator {
 }
 
 impl Translator {
-    pub fn load(path: &Path, logs: bool) -> Result<Self> {
+    /// Load the model at `path`, with `gpu_layers` of its layers on the GPU
+    /// (all of them when `None`). Without a GPU backend the model runs on the
+    /// CPU.
+    pub fn load(path: &Path, gpu_layers: Option<u32>, logs: bool) -> Result<Self> {
         if logs {
             let _ = tracing_subscriber::fmt()
                 .with_writer(std::io::stderr)
@@ -182,7 +185,8 @@ impl Translator {
         send_logs_to_tracing(LogOptions::default().with_logs_enabled(logs));
         let backend = LlamaBackend::init().context("failed to start llama.cpp")?;
         let started = Instant::now();
-        let model = LlamaModel::load_from_file(&backend, path, &LlamaModelParams::default())
+        let params = LlamaModelParams::default().with_n_gpu_layers(gpu_layers.unwrap_or(u32::MAX));
+        let model = LlamaModel::load_from_file(&backend, path, &params)
             .with_context(|| format!("failed to load the model {}", path.display()))?;
         if logs {
             eprintln!("model: loaded in {} ms", started.elapsed().as_millis());
